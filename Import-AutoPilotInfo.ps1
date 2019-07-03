@@ -29,7 +29,7 @@ function Get-AuthToken {
         throw 'AzureAD PowerShell module is not installed!'
     }
 
-    $intuneAutomationCredential = Get-AutomationPSCredential -Name automation
+    $intuneAutomationCredential = Get-AutomationPSCredential -Name "intune automation autopilot"
     $intuneAutomationAppId = Get-AutomationVariable -Name IntuneClientId
     $tenant = Get-AutomationVariable -Name Tenant
 
@@ -178,7 +178,7 @@ Function Add-AutoPilotImportedDevice(){
     (
         [Parameter(Mandatory=$true)] $serialNumber,
         [Parameter(Mandatory=$true)] $hardwareIdentifier,
-        [Parameter(Mandatory=$false)] $orderIdentifier = ""
+        [Parameter(Mandatory=$false)] [Alias("orderIdentifier")] $groupTag = ""
     )
     
         # Defining Variables
@@ -189,7 +189,7 @@ Function Add-AutoPilotImportedDevice(){
         $json = @"
 {
     "@odata.type": "#microsoft.graph.importedWindowsAutopilotDeviceIdentity",
-    "orderIdentifier": "$orderIdentifier",
+    "orderIdentifier": "$groupTag",
     "serialNumber": "$serialNumber",
     "productKey": "",
     "hardwareIdentifier": "$hardwareIdentifier",
@@ -263,7 +263,7 @@ Function Import-AutoPilotCSV(){
     param
     (
         [Parameter(Mandatory=$true)] $csvFile,
-        [Parameter(Mandatory=$false)] $orderIdentifier = ""
+        [Parameter(Mandatory=$false)] [Alias("orderIdentifier")] $groupTag = ""
     )
 
         $deviceStatusesInitial = Get-AutoPilotImportedDevice
@@ -276,7 +276,19 @@ Function Import-AutoPilotCSV(){
         # Read CSV and process each device
         $devices = Import-CSV $csvFile
         foreach ($device in $devices) {
-            Add-AutoPilotImportedDevice -serialNumber $device.'Device Serial Number' -hardwareIdentifier $device.'Hardware Hash' -orderIdentifier $orderIdentifier
+            if ($groupTag -ne "")
+            {
+                $o = $groupTag
+            }
+            elseif ($device.'Group Tag' -ne "")
+            {
+                $o = $device.'Group Tag'
+            }
+            else
+            {
+                $o = $device.'OrderID'
+            }
+            Add-AutoPilotImportedDevice -serialNumber $device.'Device Serial Number' -hardwareIdentifier $device.'Hardware Hash' -groupTag $o
         }
 
         # While we could keep a list of all the IDs that we added and then check each one, it is 
@@ -285,7 +297,7 @@ Function Import-AutoPilotCSV(){
         while ($processingCount -gt 0)
         {
             $deviceStatuses = Get-AutoPilotImportedDevice
-            $deviceCount = $deviceStatuses.Length
+            $deviceCount = ($deviceStatuses | Measure-Object).Count
 
             # Check to see if any devices are still processing (enhanced by check for pending)
             $processingCount = 0
@@ -373,7 +385,7 @@ $global:totalCount = 0
 Connect-AutoPilotIntune
 
 # Get Credentials an Automation variables
-$intuneAutomationCredential = Get-AutomationPSCredential -Name automation
+$intuneAutomationCredential = Get-AutomationPSCredential -Name "intune automation autopilot"
 Login-AzureRmAccount -Credential $intuneAutomationCredential | Out-Null
 $tenant = Get-AutomationVariable -Name Tenant
 $StorageKey = Get-AutomationVariable -Name StorageKey
@@ -442,7 +454,7 @@ if ($countOnline -gt 0) {
     $downloadFiles = Get-ChildItem -Path $PathCsvFiles -Filter "*.csv" | select -First 175
 
     # parse all .csv files and combine to single one for batch upload!
-    Set-Content -Path $CombinedOutput -Value "Device Serial Number,Windows Product ID,Hardware Hash" -Encoding Unicode
+    Set-Content -Path $CombinedOutput -Value "Device Serial Number,Windows Product ID,Hardware Hash,Group Tag" -Encoding Unicode
     $downloadFiles | % { Get-Content $_.FullName | Select -Index 1 } | Add-Content -Path $CombinedOutput -Encoding Unicode
 }
 
