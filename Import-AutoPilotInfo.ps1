@@ -501,7 +501,7 @@ if (Test-Path $CombinedOutput) {
             }
             
             if (-not $isErrorDevice -or $isSafeToDelete) {
-                Remove-AzureStorageBlob -Container $ContainerName -Blob $csvBlob.Name-Context $accountContext
+                Remove-AzureStorageBlob -Container $ContainerName -Blob $csvBlob.Name -Context $accountContext
             }
         }
     }
